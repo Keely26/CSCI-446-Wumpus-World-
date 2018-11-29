@@ -1,0 +1,102 @@
+html {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    overflow: hidden;
+    display: block;
+}
+
+body {
+    padding: 10px;
+    margin: 0;
+    background-color: rgb(12, 114, 158);
+}
+
+#wrapper {
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+}
+
+#canvas {
+    background-color: white;
+    margin: 0 auto;
+    display: block;
+    border: 10px solid black;
+}
+
+#controls {
+    padding-top: 10px;
+    text-align: center;
+    width: 425px;
+    margin: 0 auto;
+}
+
+#movesLeft {
+    float: left;
+}
+
+#movesRight {
+    float: right;
+}
+
+#movesRight p {
+    margin: 0px;
+    padding: 0px;
+    padding-top: 5px;
+}
+
+#items {
+    font-weight: bold;
+}
+
+#inventoryLabel {
+    text-decoration: underline;
+    font-weight: bold;
+}
+
+#inventory {
+    background-color: white;
+    border: 2px solid black;
+    height: 50px;
+    margin-bottom: 5px;
+}
+
+button {
+    margin: 3px;
+    font-weight: bold;
+    border-radius: 10px;
+    border-color: black;
+}
+
+#createButton {
+    width: 150px;
+    background-color: green;
+}
+
+#moveButton {
+    width: 90px;
+    background-color: darkgoldenrod;
+}
+
+#info {
+    clear: both;
+    background-color: white;
+    border: 5px solid black;
+    text-align: left;
+    padding: 0px 10px;
+    font-family: Arial;
+    height: 110px;
+}
+
+h1 {
+    font-size: 12pt;
+    text-decoration: underline;
+    margin: 2px;
+}
+
+p {
+    margin: 2px;
+}
