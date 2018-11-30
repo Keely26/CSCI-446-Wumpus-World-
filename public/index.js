@@ -7,22 +7,27 @@ function run() {
     mapSize = 5;                // the number of tiles 
     running = false;            // if the game is running
 
-    pCol = 0;
-    pRow = 0;
-    pd = 0;
-    numArrows = 1;
-    hasGold = false;
-    pImg = new Image();
+    pCol = 0;                   // the col the player is in
+    pRow = 0;                   // the row the player is in
+    pd = 0;                     // the direction the player is facing 0:right,1:down,2:left,3:top
+    numArrows = 1;              // number of arrows in inventory
+    hasGold = false;            // if the player is holding gold
+    pImg = new Image();         // image for the player
     pImg.src = "player.png";
 
     window.addEventListener('resize', resizeCanvas, false);
-    document.onkeydown = handleKey;
+    document.onkeydown = handleKey; //call key handler function when key pressed
 
     resizeCanvas();
     gameLoop();
 }
 
+// randomly populate a map with given size
+// one wumpus
+// one gold
+// pits placed with 20% probability
 function createMap(size) {
+    // initialize map as empty squares
     mapSize = size;
     map = Array(mapSize);
     for(i = 0; i < mapSize; i++) {
@@ -31,12 +36,15 @@ function createMap(size) {
             map[i][j] = ' ';
         }
     }
+    // place gold
     coords = getRandomEmptyCoords();
     map[coords[0]][coords[1]] = 'g';
 
+    // place wumpus
     coords = getRandomEmptyCoords();
     map[coords[0]][coords[1]] = 'w';
 
+    // place pits
     for(i = 0; i < mapSize; i++) {
         for(j = 0; j < mapSize; j++) {
             if(Math.random() < 0.2 && isEmpty(i, j)) {
@@ -45,6 +53,7 @@ function createMap(size) {
         }
     }
 
+    // reset variables for new game
     pCol = 0;
     pRow = 0;
     pd = 0;
@@ -52,30 +61,36 @@ function createMap(size) {
     hasGold = false;
     numArrows = 1;
 
+    // reset inventory and location information
     resizeCanvas();
     updateInventory();
     checkLocation();
 }
 
+// return coordinates of an empty square
 function getRandomEmptyCoords() {
     do {
-        x = Math.floor(Math.random()*mapSize);
-        y = Math.floor(Math.random()*mapSize);
+        row = Math.floor(Math.random()*mapSize);
+        col = Math.floor(Math.random()*mapSize);
     }
-    while(!isEmpty(x, y));
+    while(!isEmpty(row, col));
     
-    return [x, y];
+    return [row, col];
 }
 
-function isEmpty(x, y) {
-    return !(x==0 && y==0) && map[x][y] == ' ';
+// if a square is empty
+function isEmpty(row, col) {
+    return !(row==0 && col==0) && map[row][col] == ' ';
 }
 
-function isValid(x, y) {
-    return x >= 0 && x < mapSize && y >= 0 && y < mapSize;
+// if a square is in the map
+function isValid(row, col) {
+    return row >= 0 && row < mapSize && col >= 0 && col < mapSize;
 }
 
+// handle keyboard input
 function handleKey(e) {
+    // i don't remember which numbers corespond to which key
     if(e.keyCode == '38') {
         move(0);
     }
