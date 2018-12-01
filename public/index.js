@@ -6,6 +6,7 @@ function run() {
     map = null;                 // 2d char array representing game board
     mapSize = 5;                // the number of tiles 
     running = false;            // if the game is running
+    dead = false;               // if the player is dead
 
     pCol = 0;                   // the col the player is in
     pRow = 0;                   // the row the player is in
@@ -30,9 +31,9 @@ function createMap(size) {
     // initialize map as empty squares
     mapSize = size;
     map = Array(mapSize);
-    for(i = 0; i < mapSize; i++) {
+    for (i = 0; i < mapSize; i++) {
         map[i] = Array(mapSize);
-        for(j = 0; j < mapSize; j++) {
+        for (j = 0; j < mapSize; j++) {
             map[i][j] = ' ';
         }
     }
@@ -45,9 +46,9 @@ function createMap(size) {
     map[coords[0]][coords[1]] = 'w';
 
     // place pits
-    for(i = 0; i < mapSize; i++) {
-        for(j = 0; j < mapSize; j++) {
-            if(Math.random() < 0.2 && isEmpty(i, j)) {
+    for (i = 0; i < mapSize; i++) {
+        for (j = 0; j < mapSize; j++) {
+            if (Math.random() < 0.2 && isEmpty(i, j)) {
                 map[i][j] = 'p';
             }
         }
@@ -58,6 +59,7 @@ function createMap(size) {
     pRow = 0;
     pd = 0;
     running = true;
+    dead = false;
     hasGold = false;
     numArrows = 1;
 
@@ -67,20 +69,95 @@ function createMap(size) {
     checkLocation();
 }
 
+
+
+
+
+async function runAI() {
+
+    travelPath = Array(1)
+
+    visitedMap = Array(mapSize);
+    for (i = 0; i < mapSize; i++) {
+        visitedMap[i] = Array(mapSize);
+        for (j = 0; j < mapSize; j++) {
+            visitedMap[i][j] = ' ';
+        }
+    }
+
+    // Mark the start
+    visitedMap[0][0] = 'X'
+    travelPath[0] = new PCoord(pRow, pCol)
+
+    console.log("starting AI!")
+    while (running) {
+        turnComplete = false;
+        gameLoop()
+        // Turn until we aren't facing a wall
+        if (isFacingWall() && !turnComplete) {
+            move(1)
+            turnComplete = true
+        } else {
+            if (hasGold) {
+                console.log("Whoa, we have the gold, this is where spencer needs to nav back to the start!")
+                isFacingCoords()
+                break
+            }
+
+
+            // If we have visited the tile we are facing, turn, unless we feel a breeze
+            if (isFacingVisitedSquare() && !turnComplete) {
+                if (nearPit() && !turnComplete) {
+                    move(0)
+                    turnComplete = true
+                }
+                if (!turnComplete) {
+                    move(1)
+                    turnComplete = true
+                }
+            }
+            else {
+                if (nearGold() && !turnComplete) {
+                    move(3)
+                    turnComplete = true
+                }
+                // TODO: check for wumpus and nearPit, and backtrack if necessary
+
+
+
+                move(0)
+                turnComplete = true
+            }
+
+            visitedMap[pRow][pCol] == 'X'
+            travelPath.push(new PCoord(pRow, pCol))
+        }
+        // Sleep for 500ms for rendering purposes
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+
+
+    }
+
+    console.log(travelPath)
+
+}
+
+
 // return coordinates of an empty square
 function getRandomEmptyCoords() {
     do {
-        row = Math.floor(Math.random()*mapSize);
-        col = Math.floor(Math.random()*mapSize);
+        row = Math.floor(Math.random() * mapSize);
+        col = Math.floor(Math.random() * mapSize);
     }
-    while(!isEmpty(row, col));
-    
+    while (!isEmpty(row, col));
+
     return [row, col];
 }
 
 // if a square is empty
 function isEmpty(row, col) {
-    return !(row==0 && col==0) && map[row][col] == ' ';
+    return !(row == 0 && col == 0) && map[row][col] == ' ';
 }
 
 // if a square is in the map
@@ -91,74 +168,153 @@ function isValid(row, col) {
 // handle keyboard input
 function handleKey(e) {
     // i don't remember which numbers corespond to which key
-    if(e.keyCode == '38') {
+    if (e.keyCode == '38') {
         move(0);
     }
-    else if(e.keyCode == '37') {
+    else if (e.keyCode == '37') {
         move(1);
     }
-    else if(e.keyCode == '39') {
+    else if (e.keyCode == '39') {
         move(2);
     }
-    else if(e.keyCode == '40') {
+    else if (e.keyCode == '40') {
         move(3);
     }
-    else if(e.keyCode == '16') {
+    else if (e.keyCode == '16') {
         move(4);
     }
 }
 
+function isFacingWall() {
+    // Facing right
+    if (pd == 0 && pCol < mapSize - 1) {
+        return false;
+    }
+    // Facing left
+    else if (pd == 1 && pRow < mapSize - 1) {
+        return false;
+    }
+    // Facing down
+    else if (pd == 2 && pCol > 0) {
+        return false;
+    }
+    // Facing up
+    else if (pd == 3 && pRow > 0) {
+        return false;
+
+    }
+    return true;
+}
+
+function isFacingVisitedSquare() {
+    console.log("Col: " + col)
+    // Facing right
+    if (pd == 0 && (pCol + 1) < mapSize) {
+        if (visitedMap[pRow][pCol + 1] == 'X') {
+            return true;
+        }
+    }
+    // Facing down
+    else if (pd == 1 && (pRow + 1) < mapSize) {
+        if (visitedMap[pRow + 1][pCol] == 'X') {
+            return true;
+        }
+    }
+    // Facing left
+    else if (pd == 2 && (pCol - 1) > -1) {
+        if (visitedMap[pRow][pCol - 1] == 'X') {
+            return true;
+        }
+    }
+    // Facing up
+    else if (pd == 3 && (pRow - 1) > -1) {
+        if (visitedMap[pRow - 1][pCol] == 'X') {
+            return true;
+        }
+    }
+    return false;
+}
+
+function isFacingCoords(row, col) {
+    // TODO:
+    if (pd == 0 && (pCol + 1) < mapSize) {
+        if (visitedMap[pRow][pCol + 1] == 'X') {
+            return true;
+        }
+    }
+    // Facing down
+    else if (pd == 1 && (pRow + 1) < mapSize) {
+        if (visitedMap[pRow + 1][pCol] == 'X') {
+            return true;
+        }
+    }
+    // Facing left
+    else if (pd == 2 && (pCol - 1) > -1) {
+        if (visitedMap[pRow][pCol - 1] == 'X') {
+            return true;
+        }
+    }
+    // Facing up
+    else if (pd == 3 && (pRow - 1) > -1) {
+        if (map[pRow - 1][pCol] == 'X') {
+            return true;
+        }
+    }
+    return false
+}
+
+
 function move(num) {
     // only allow move if the game is running
-    if(!running) {
+    if (!running) {
         return;
     }
 
     // move forward
-    if(num == 0) {
+    if (num == 0) {
         moved = false;
         // move according to the player direction
-        if(pd == 0 && pCol < mapSize-1) {
+        if (pd == 0 && pCol < mapSize - 1) {
             pCol += 1;
             moved = true;
         }
-        else if(pd == 1 && pRow < mapSize-1) {
+        else if (pd == 1 && pRow < mapSize - 1) {
             pRow += 1;
             moved = true;
         }
-        else if(pd == 2 && pCol > 0) {
+        else if (pd == 2 && pCol > 0) {
             pCol -= 1;
             moved = true;
         }
-        else if(pd == 3 && pRow > 0) {
+        else if (pd == 3 && pRow > 0) {
             pRow -= 1;
             moved = true;
         }
     }
     // turn left
-    else if(num == 1) {
+    else if (num == 1) {
         pd -= 1;
-        if(pd < 0) {
+        if (pd < 0) {
             pd = 3
         }
     }
     // turn right
-    else if(num == 2) {
+    else if (num == 2) {
         pd += 1;
-        if(pd > 3) {
+        if (pd > 3) {
             pd = 0;
 
         }
     }
     // pick up
-    else if(num == 3) {
-        if(map[pRow][pCol] == 'g') {
+    else if (num == 3) {
+        if (map[pRow][pCol] == 'g') {
             map[pRow][pCol] = ' ';
             hasGold = true;
         }
     }
     // shoot
-    else if(num == 4) {
+    else if (num == 4) {
         shoot();
     }
 
@@ -168,31 +324,31 @@ function move(num) {
 
 function shoot() {
     // check if there is an arrow to shoot
-    if(numArrows <= 0) {
+    if (numArrows <= 0) {
         return;
     }
     // shoot right
-    if(pd == 0) {
-        for(i = pCol; i < mapSize; i++) {
-            if(map[pRow][i] == "w") {
+    if (pd == 0) {
+        for (i = pCol; i < mapSize; i++) {
+            if (map[pRow][i] == "w") {
                 map[pRow][i] = " ";
                 console.log("You killed the Wumpus!");
             }
         }
     }
     // shoot down
-    else if(pd == 1) {
-        for(i = pRow; i < mapSize; i++) {
-            if(map[i][pCol] == "w") {
+    else if (pd == 1) {
+        for (i = pRow; i < mapSize; i++) {
+            if (map[i][pCol] == "w") {
                 map[i][pCol] = " ";
                 console.log("You killed the Wumpus!");
             }
         }
     }
     // shoot left
-    else if(pd == 2) {
-        for(i = pCol; i >= 0; i--) {
-            if(map[pRow][i] == "w") {
+    else if (pd == 2) {
+        for (i = pCol; i >= 0; i--) {
+            if (map[pRow][i] == "w") {
                 map[pRow][i] = " ";
                 console.log("You killed the Wumpus!");
             }
@@ -200,8 +356,8 @@ function shoot() {
     }
     // shoot up
     else {
-        for(i = pRow; i >= 0; i--) {
-            if(map[i][pCol] == "w") {
+        for (i = pRow; i >= 0; i--) {
+            if (map[i][pCol] == "w") {
                 map[i][pCol] = " ";
                 console.log("You killed the Wumpus!");
             }
@@ -218,7 +374,7 @@ function updateInventory() {
     node.innerText = "Arrows x";
     node.innerText += numArrows;
     // set if player is holding gold
-    if(hasGold) {
+    if (hasGold) {
         node.innerText += ",    Gold";
     }
 }
@@ -229,35 +385,37 @@ function checkLocation() {
     list.innerHTML = '';
 
     // check if player is on wumpus
-    if(map[pRow][pCol] == 'w') {
+    if (map[pRow][pCol] == 'w') {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You were eaten by the Wumpus!"));
         list.appendChild(entry);
+
         running = false;
     }
     // check if player is on pit
-    if(map[pRow][pCol] == 'p') {
+    if (map[pRow][pCol] == 'p') {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You fell into a pit!"));
         list.appendChild(entry);
         running = false;
     }
     // check if the player died from wumpus or pit
-    if(!running) {
+    if (!running) {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You lose!"));
         list.appendChild(entry);
+        died = true;
         return;
     }
 
     // set current tile to visited
-    if(map[pRow][pCol] == " ") {
+    if (map[pRow][pCol] == " ") {
         map[pRow][pCol] = "v";
     }
 
     // the player wins if they have gold and
     // are on the top left square
-    if(pRow == 0 && pCol == 0 && hasGold) {
+    if (pRow == 0 && pCol == 0 && hasGold) {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You win!"));
         list.appendChild(entry);
@@ -266,19 +424,19 @@ function checkLocation() {
     }
 
     // notify if wumpus is in 4 surrounding squares
-    if(nearWumpus()) {
+    if (nearWumpus()) {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You smell a stench."));
         list.appendChild(entry);
     }
     // notify if pit is in 4 surrounding squares
-    if(nearPit()) {
+    if (nearPit()) {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You feel a breeze."));
         list.appendChild(entry);
     }
     // notify if gold is in current square
-    if(nearGold()) {
+    if (nearGold()) {
         entry = document.createElement("li");
         entry.appendChild(document.createTextNode("You see a glitter."));
         list.appendChild(entry);
@@ -288,11 +446,11 @@ function checkLocation() {
 // get the char values of the 4 adjacent squares
 function getNeighborValues(row, col) {
     neighborValues = [];
-    neighbors = [[row-1, col], [row+1, col],
-                 [row, col-1], [row, col+1]];
-    for(i = 0; i < neighbors.length; i++) {
+    neighbors = [[row - 1, col], [row + 1, col],
+    [row, col - 1], [row, col + 1]];
+    for (i = 0; i < neighbors.length; i++) {
         n = neighbors[i];
-        if(isValid(n[0], n[1])) {
+        if (isValid(n[0], n[1])) {
             neighborValues.push(map[n[0]][n[1]]);
         }
     }
@@ -319,7 +477,7 @@ function gameLoop() {
     window.requestAnimationFrame(gameLoop);
 
     currentTime = (new Date()).getTime();
-    delta = (currentTime-lastTime)/1000;
+    delta = (currentTime - lastTime) / 1000;
 
     draw();
 
@@ -329,19 +487,19 @@ function gameLoop() {
 // draw game board on canvas
 function draw() {
     // clear canvas
-    ctx.clearRect(0, 0, canvasSize,canvasSize);
+    ctx.clearRect(0, 0, canvasSize, canvasSize);
 
     // draw map if created
-    if(map) {
-        for(row = 0; row < mapSize; row++) {
-            for(col = 0; col < mapSize; col++) {
+    if (map) {
+        for (row = 0; row < mapSize; row++) {
+            for (col = 0; col < mapSize; col++) {
                 char = map[row][col];
                 // if the game is running only draw
                 // whether a square is or isn't visited
                 // don't draw pits, wumpus, or gold
-                if(char == " " || char == "v" || running) {
+                if (char == " " || char == "v" || running) {
                     // draw visited squares
-                    if(char == "v" && running) {
+                    if (char == "v" && running) {
                         ctx.fillStyle = "#ADD8E6";
                     }
                     // draw unvisited squares
@@ -350,45 +508,54 @@ function draw() {
                     }
                 }
                 // draw wumpus
-                else if(char == "w") {
+                else if (char == "w") {
                     ctx.fillStyle = "red";
                 }
                 // draw gold
-                else if(char == "g") {
+                else if (char == "g") {
                     ctx.fillStyle = "yellow";
                 }
                 // draw pit
-                else if(char == "p") {
+                else if (char == "p") {
                     ctx.fillStyle = "black";
                 }
                 // draw rectangle with specific color
-                ctx.fillRect(col*tileSize, row*tileSize, tileSize, tileSize);
-            
+                ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
+
                 // draw square border
                 ctx.strokeStyle = 'black';
-                ctx.strokeRect(col*tileSize, row*tileSize, tileSize, tileSize);
+                ctx.strokeRect(col * tileSize, row * tileSize, tileSize, tileSize);
             }
         }
         // draw player image with correct rotation
-        ctx.translate(pCol*tileSize + tileSize/2, pRow*tileSize + tileSize/2);
-        ctx.rotate(pd/2 * Math.PI);
-        ctx.drawImage(pImg, -tileSize/2 * 0.9, -tileSize/2 * 0.9, tileSize * 0.9, tileSize * 0.9);
-        ctx.rotate(-pd/2 * Math.PI);
-        ctx.translate(-(pCol*tileSize + tileSize/2), -(pRow*tileSize + tileSize/2));
+        ctx.translate(pCol * tileSize + tileSize / 2, pRow * tileSize + tileSize / 2);
+        ctx.rotate(pd / 2 * Math.PI);
+        ctx.drawImage(pImg, -tileSize / 2 * 0.9, -tileSize / 2 * 0.9, tileSize * 0.9, tileSize * 0.9);
+        ctx.rotate(-pd / 2 * Math.PI);
+        ctx.translate(-(pCol * tileSize + tileSize / 2), -(pRow * tileSize + tileSize / 2));
     }
     // otherwise draw prompt to create a map
     else {
-        ctx.font="20px Arial";
-        ctx.textAlign="center";
-        ctx.fillText("Press a Button to Create a Map!", canvasSize/2, canvasSize/2);
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Press a Button to Create a Map!", canvasSize / 2, canvasSize / 2);
     }
 }
 
 // resize canvas and update tileSize when window size changes
-function resizeCanvas(){
+function resizeCanvas() {
     canvasSize = Math.min(wrapper.offsetWidth - 20, wrapper.offsetHeight - 300);
     tileSize = canvasSize / mapSize;
     canvas.width = canvasSize;
     canvas.height = canvasSize;
     draw();
+}
+
+
+
+class PCoord {
+    constructor(row, col) {
+        this.row = row;
+        this.col = col;
+    }
 }
