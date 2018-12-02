@@ -1,40 +1,43 @@
 <html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>Wumpus World</title>
-    <link rel="stylesheet" type="text/css" href="index.css">
-    <script type="text/javascript" src="index.js"></script>
-  </head>
-  <body onload="run()">
-    <div id="wrapper">
-      <canvas id="canvas"></canvas>
-      <div id="controls">
-        <button onClick='createMap(4)' id='createButton'>Create 4x4 Map</button>
-        <button onClick='createMap(5)' id='createButton'>Create 5x5 Map</button>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Wumpus World</title>
+  <link rel="stylesheet" type="text/css" href="index.css">
+  <script type="text/javascript" src="index.js"></script>
+</head>
+
+<body onload="run()">
+  <div id="wrapper">
+    <canvas id="canvas"></canvas>
+    <div id="controls">
+      <button onClick='createMap(4)' id='createButton'>Create 4x4 Map</button>
+      <button onClick='createMap(5)' id='createButton'>Create 5x5 Map</button>
+      <br>
+      <button onClick='createMap(8)' id='createButton'>Create 8x8 Map</button>
+      <button onClick='createMap(10)' id='createButton'>Create 10x10 Map</button>
+      <br>
+      <div id="movesLeft">
+        <button onClick='move(0)' id='moveButton'>Forward<br>(↑)</button>
         <br>
-        <button onClick='createMap(8)' id='createButton'>Create 8x8 Map</button>
-        <button onClick='createMap(10)' id='createButton'>Create 10x10 Map</button>
-        <br>
-        <div id="movesLeft">
-          <button onClick='move(0)' id='moveButton'>Forward<br>(↑)</button>
-          <br>
-          <button onClick='move(1)' id='moveButton'>Turn Left<br>(←)</button> 
-          <button onClick='move(2)' id='moveButton'>Turn Right<br>(→)</button> 
-        </div>
-        <div id="movesRight">
-          <button onClick='move(3)' id='moveButton'>Pick Up<br>(↓)</button>
-          <button onClick='move(4)' id='moveButton'>Shoot<br>(Shift)</button>
-          <div id="inventory">
-            <p id='inventoryLabel'>Inventory:</p>
-            <p id='items'></p>
-          </div>
-        </div>
-        <div id="info">
-          <h1>Current Tile Info:</h1>
-          <ul id="infoList">
-          </ul>
+        <button onClick='move(1)' id='moveButton'>Turn Left<br>(←)</button>
+        <button onClick='move(2)' id='moveButton'>Turn Right<br>(→)</button>
+      </div>
+      <div id="movesRight">
+        <button onClick='move(3)' id='moveButton'>Pick Up<br>(↓)</button>
+        <button onClick='move(4)' id='moveButton'>Shoot<br>(Shift)</button>
+        <div id="inventory">
+          <p id='inventoryLabel'>Inventory:</p>
+          <p id='items'></p>
         </div>
       </div>
-    </div>  
-  </body>
+      <div id="info">
+        <h1>Current Tile Info:</h1>
+        <ul id="infoList">
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+
 </html>
