@@ -628,10 +628,6 @@ function draw() {
                 ctx.strokeStyle = 'black';
                 ctx.strokeRect(col * tileSize, row * tileSize, tileSize, tileSize);
 
-
-
-
-
                 // Draw Percept overlay
                 percept = perceptMap[row][col]
 
