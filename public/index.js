@@ -56,8 +56,6 @@ function createMap(size) {
             }
         }
     }
-    // Reset the travelPath of the Player/AI
-    travelPath = Array(1)
 
     // reset variables for new game
     pCol = 0;
@@ -79,18 +77,17 @@ function createMap(size) {
 
 
 async function runAI() {
-
-    // Mark the start
-    travelPath[0] = new PCoord(pRow, pCol)
-
     console.log("starting AI!")
+
     while (running) {
-        // Store the percept for this tile. WE won't use our own persept, but we will use the knowledge later
-        storePercept()
-
-
-        turnComplete = false;
         gameLoop()
+        turnComplete = false;
+
+        // Store some of the the percept for this tile. 
+        // We won't use our current percept object, but we will use the knowledge later
+        perceptMap[pRow][pCol].nearWumpus = nearWumpus()
+        perceptMap[pRow][pCol].nearPit = nearPit()
+
 
         // Turn until we aren't facing a wall
         while (isFacingWall()) {
@@ -116,6 +113,7 @@ async function runAI() {
 
         // If we are totally surrounded by visited tiles
         if (surroundedByVisited() && !turnComplete) {
+            // TODO: This should also not be random
             rand = Math.random()
             if (rand <= .05) {
                 move(1)
@@ -127,38 +125,37 @@ async function runAI() {
             turnComplete = true
         }
 
-        // If we have visited the tile we are facing, turn, unless we feel a breeze
+        // If we have visited the tile we are facing, turn, unless we feel a breeze or smell the wumpus, then leave
         if (isFacingVisitedSquare() && !turnComplete) {
             if ((nearPit() || nearWumpus())) {
                 move(0)
-                turnComplete = true
-            }
-            move(1)
-            turnComplete = true
-
-        }
-        else if (!turnComplete) {
-            if (nearPit() || nearWumpus() && !turnComplete) {
+            } else {
                 move(1)
-                turnComplete = true
-
             }
-            move(0)
             turnComplete = true
-        }
 
-        // Sleep for 500ms for rendering purposes
+        }
+        // else if (!turnComplete) {
+        //     if (nearPit() || nearWumpus() && !turnComplete) {
+        //         move(1)
+        //     } else {
+        //         move(0)
+        //     }
+        //     turnComplete = true
+        // }
+        if (!turnComplete) {
+            console.error("Empty Turn! No move was made")
+        }
+        // Sleep for 200ms for rendering purposes
         await new Promise(resolve => setTimeout(resolve, 200));
 
 
 
     }
-
-    console.log(travelPath)
-
 }
 
 async function returnHome() {
+    // Keep trying to get home as long as we aren't there
     while (pCol != 0 || pRow != 0) {
         moveComplete = false
 
@@ -212,11 +209,6 @@ async function returnHome() {
         await new Promise(resolve => setTimeout(resolve, 200));
         gameLoop()
     }
-}
-
-function storePercept() {
-    perceptMap[pRow][pCol].nearWumpus = nearWumpus()
-    perceptMap[pRow][pCol].nearPit = nearPit()
 }
 
 // return coordinates of an empty square
