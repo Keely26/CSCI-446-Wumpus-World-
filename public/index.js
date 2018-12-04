@@ -79,7 +79,10 @@ function haltAI() {
 
 async function runAI() {
     console.log("starting AI!")
+    test = bfs(2, 4)
 
+    console.log(JSON.stringify(test))
+    running = false
     while (running) {
         console.log("~~~ START TICK ~~~")
         turnComplete = false;
@@ -190,8 +193,6 @@ async function runAI() {
 }
 
 async function returnHome() {
-
-    // TODO: BFS
     // Keep trying to get home as long as we aren't there
     while (pCol != 0 || pRow != 0) {
         moveComplete = false
@@ -263,76 +264,188 @@ function getRandomEmptyCoords() {
 function calculatePercepts() {
     for (i = 0; i < mapSize; i++) {
         for (j = 0; j < mapSize; j++) {
+            curTile = tileKnowledge[i][j]
+            curTile.probabilityPit = 0
+            curTile.probabilityWumpus = 0
+
+            if (map[i][j] == 'v') {
+                curTile.probabilityPit = -1
+                curTile.probabilityWumpus = -1
+                continue
+            }
+            // Down
+            if (isValid(i + 1, j)) {
+                downPercept = tileKnowledge[i + 1][j]
+                if (!downPercept.visited) {
+                    curTile.probabilityPit += .10
+                    curTile.probabilityWumpus += .10
+                } else {
+                    if (downPercept.nearPit) {
+                        curTile.probabilityPit += .50
+                    }
+                    if (downPercept.nearWumpus) {
+                        curTile.probabilityWumpus += .50
+                    }
+                }
+            } else {
+                curTile.probabilityPit += .10
+                curTile.probabilityWumpus += .10
+            }
+            // Up
+            if (isValid(i - 1, j)) {
+                upPercept = tileKnowledge[i - 1][j]
+                if (!upPercept.visited) {
+                    curTile.probabilityPit += .10
+                    curTile.probabilityWumpus += .10
+                } else {
+                    if (upPercept.nearPit) {
+                        curTile.probabilityPit += .50
+                    }
+                    if (upPercept.nearWumpus) {
+                        curTile.probabilityWumpus += .50
+                    }
+                }
+            } else {
+                curTile.probabilityPit += .10
+                curTile.probabilityWumpus += .10
+            }
+            // Right
+            if (isValid(i, j + 1)) {
+                rightPercept = tileKnowledge[i][j + 1]
+                if (!rightPercept.visited) {
+                    curTile.probabilityPit += .10
+                    curTile.probabilityWumpus += .10
+                } else {
+                    if (rightPercept.nearPit) {
+                        curTile.probabilityPit += .50
+                    }
+                    if (rightPercept.nearWumpus) {
+                        curTile.probabilityWumpus += .50
+                    }
+                }
+
+            } else {
+                curTile.probabilityPit += .10
+                curTile.probabilityWumpus += .10
+            }
+
+            // Left
+            if (isValid(i, j - 1)) {
+                leftPercept = tileKnowledge[i][j - 1]
+                if (!leftPercept.visited) {
+                    curTile.probabilityPit += .10
+                    curTile.probabilityWumpus += .10
+                } else {
+                    if (leftPercept.nearPit) {
+                        curTile.probabilityPit += .50
+                    }
+                    if (leftPercept.nearWumpus) {
+                        curTile.probabilityWumpus += .50
+                    }
+                }
+            } else {
+                curTile.probabilityPit += .10
+                curTile.probabilityWumpus += .10
+            }
+
+
 
         }
     }
-
-
-
 }
 
-function guessTile(row, col) {
-
-    // Get our current tile's info
-    thisPercept = tileKnowledge[row][col]
-
-    percent = new Array(2)
-
-    // If we've visited this tile, all is well, and it has a 0% chance of being a bad tile
-    if (map[row][col] == 'v') {
-        thisPercept.probabilityPit = 0
-        thisPercept.probabilityWumpus = 0
-        return thisPercept
-    }
-
-    console.log("Started guessing a tile: R=" + row + " C=" + col)
 
 
-    pIsPit = 0
-    pIsWumpus = 0
-    visitedTiles = 0
-    percepts = Array(4)
+function bfs(rowToFind, colToFind) {
 
-    if (isValid(row + 1, col)) {
-        percepts[1] = tileKnowledge[row + 1][col]
-        console.log("down is a valid location. Percept: " + percepts[0])
-    }
-    if (isValid(row - 1, col)) {
-        percepts[3] = tileKnowledge[row - 1][col]
-        console.log("up is a valid location. Percept: " + percepts[1])
-    }
-    if (isValid(row, col - 1)) {
-        percepts[2] = tileKnowledge[row][col - 1]
-        console.log("left is a valid location. Percept: " + percepts[2])
-    }
-    if (isValid(row, col + 1)) {
-        percepts[0] = tileKnowledge[row][col + 1]
-        console.log("right is a valid location. Percept: " + percepts[3])
+    open_set = Array()
 
-    }
+    // # an empty set to maintain visited nodes
+    closed_set = Array()
 
-    percepts.forEach(function (percept, i) {
-        if (percept.visited == false) {
-            console.log(i + " was not visited percept " + percept)
-            pIsPit += .15
-            pIsWumpus += .15
-            return
-        } else {
-            console.log(i + " was percept " + percept)
-            visitedTiles++
+    // # a dictionary to maintain meta information(used for path formation)
+    // # key -> (parent state, action to reach child)
+    meta = {}
+
+    // # initialize
+    root = new PCoord(pRow, pCol)
+    meta[root] = new SpecItem(null, null)
+    open_set.push(root)
+
+    // # For each node on the current level expand and process, if no children
+    // # (leaf) then unwind
+    while (open_set.length > 0) {
+        // console.log(open_set)
+        console.log(meta)
+
+        subtree_root = open_set.shift()
+
+        // # We found the node we wanted so stop and emit a path.
+        if (subtree_root.row == rowToFind && subtree_root.col == colToFind) {
+            console.log("Searching is cool!")
+            meta[subtree_root] = new SpecItem(subtree_root, "0") //create metadata for these nodes
+            return construct_path(subtree_root, meta)
         }
 
-        if (percept.nearPit == true) {
-            console.log(i + " is near a pit " + percept)
-            pIsPit += .30
-        }
-        if (percept.nearWumpus == true) {
-            console.log(i + " is near a wumpus " + percept)
-            pIsWumpus += .30
-        }
-    })
+        neighbors = getNeighborCoords(subtree_root)
+        // # For each child of the current tree process
+        for (i = 0; i < neighbors.length; i++) {
 
+            // # The node has already been processed, so skip over it
+            if (closed_set.filter(node => node.row == neighbors[i].row && node.col == neighbors[i].col).length > 0) {
+                console.log("Processed")
+                continue
+            }
+
+            // # The neighbors[i] is not enqueued to be processed, so enqueue this level of
+            // # neighbors[i]ren to be expanded
+            if (open_set.filter(node => node.row == neighbors[i].row && node.col == neighbors[i].col).length == 0) {
+                console.log("Processing " + neighbors[i])
+                meta[neighbors[i]] = new SpecItem(subtree_root, "0") //create metadata for these nodes
+                open_set.push(neighbors[i]) // enqueue these nodes
+            }
+        }
+    }
+    // # We finished processing the root of this subtree, so add it to the closed
+    // # set
+    closed_set.push(subtree_root)
 }
+
+// # Produce a backtrace of the actions taken to find the goal node, using the
+// # recorded meta dictionary
+function construct_path(state, meta) {
+    console.log(JSON.stringify(state) + " \n\n\n" + JSON.stringify(meta))
+    action_list = Array()
+    // # Continue until you reach root meta data(i.e. (None, None))
+    while (meta[state] != null) {
+        action = meta[state].action
+        action_list.push(action)
+        state = meta[state].state
+    }
+    action_list.reverse()
+    return action_list
+}
+
+
+function getNeighborCoords(pcCenter) {
+    neighbors = []
+    if (isValid(pcCenter.row, pcCenter.col + 1)) {
+        neighbors.push(new PCoord(pcCenter.row, pcCenter.col + 1))
+    }
+    if (isValid(pcCenter.row, pcCenter.col - 1)) {
+        neighbors.push(new PCoord(pcCenter.row, pcCenter.col - 1))
+    }
+    if (isValid(pcCenter.row + 1, pcCenter.col)) {
+        neighbors.push(new PCoord(pcCenter.row + 1, pcCenter.col))
+    }
+    if (isValid(pcCenter.row - 1, pcCenter.col)) {
+        neighbors.push(new PCoord(pcCenter.row - 1, pcCenter.col))
+    }
+    return neighbors
+}
+
+
+
 
 // handle keyboard input
 function handleKey(e) {
@@ -748,15 +861,15 @@ function draw() {
                 percept = tileKnowledge[row][col]
 
                 ctx.font = tileSize / 4 + "px Arial";
-                if (percept.nearWumpus) {
-                    ctx.fillStyle = 'orange';
-                    ctx.fillText("NW", col * tileSize, row * tileSize + tileSize - (tileSize / 4.5));
-                }
-                if (percept.nearPit) {
-                    ctx.fillStyle = 'black';
-                    ctx.fillText("NP", col * tileSize, row * tileSize + tileSize);
+                // if (percept.nearWumpus) {
+                ctx.fillStyle = 'orange';
+                ctx.fillText(percept.probabilityWumpus, col * tileSize, row * tileSize + tileSize - (tileSize / 4.5));
+                // }
+                // if (percept.nearPit) {
+                ctx.fillStyle = 'black';
+                ctx.fillText(percept.probabilityPit, col * tileSize, row * tileSize + tileSize);
 
-                }
+                // }
                 if (percept.knownPit) {
                     ctx.font = tileSize / 3 + "px Arial";
                     ctx.fillStyle = 'white';
@@ -791,6 +904,14 @@ function resizeCanvas() {
 }
 
 
+class SpecItem {
+    constructor(parent_state, action) {
+        this.parent_state = parent_state
+        this.action = action
+    }
+}
+
+
 
 class PCoord {
     constructor(row, col) {
@@ -799,11 +920,18 @@ class PCoord {
     }
 }
 
-class PerceptNode {
-    probabilityPit = 0;
-    probabilityWumpus = 0;
+PCoord.prototype.toString = function () {
+    return "PCoord instance #" + this.row * this.col;
+};
 
-    nearPit;
-    nearWumpus;
-    visited;
+
+class PerceptNode {
+    constructor() {
+        this.probabilityPit = 0
+        this.probabilityWumpus = 0
+        this.nearPit = false
+        this.nearWumpus = false
+        this.visited = false
+    }
+
 }
