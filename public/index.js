@@ -3,6 +3,7 @@ function run() {
     canvas = document.getElementById('canvas'); // the html5 canvas
     ctx = canvas.getContext('2d');              // the rendering context
     lastTime = (new Date()).getTime();          // the last game loop time
+    tickLength = 32            // Time in ms between rerenders
     map = null;                 // 2d char array representing game board
     mapSize = 5;                // the number of tiles 
     running = false;            // if the game is running
@@ -37,7 +38,7 @@ function createMap(size) {
         tileKnowledge[i] = Array(mapSize)
         for (j = 0; j < mapSize; j++) {
             map[i][j] = ' ';
-            tileKnowledge[i][j] = new PerceptNode()
+            tileKnowledge[i][j] = new PerceptNode(new PCoord(i, j))
         }
     }
     // place gold
@@ -72,111 +73,180 @@ function createMap(size) {
     checkLocation();
 }
 
+// Kills the AI
 function haltAI() {
     console.log("Terminating AI")
     running = false
 }
 
-async function runAI() {
+
+async function runCautiousAI() {
     console.log("starting AI!")
-    test = bfs(2, 4)
-
-    console.log(JSON.stringify(test))
-    running = false
+    gameScore = 0
     while (running) {
-        console.log("~~~ START TICK ~~~")
+        gameLoop()
         turnComplete = false;
-
-        // Store some of the percept for this tile. 
-        ourPercept = tileKnowledge[pRow][pCol]
-        ourPercept.nearWumpus = nearWumpus()
-        ourPercept.nearPit = nearPit()
-        ourPercept.visited = true
-        tileKnowledge[pRow][pCol] = ourPercept
-
-        // Run a pass over the percepts to (hopefully) do some learning
-        calculatePercepts()
-
+        // Store some of the the percept for this tile. 
+        // We won't use our current percept object, but we will use the knowledge later
+        tileKnowledge[pRow][pCol].nearWumpus = nearWumpus()
+        tileKnowledge[pRow][pCol].nearPit = nearPit()
+        tileKnowledge[pRow][pCol].timesVisited += 1
+        console.log(tileKnowledge[pRow][pCol].timesVisited)
         // Turn until we aren't facing a wall
         while (isFacingWall()) {
-            // TODO: This shouldn't be random
             if (Math.random() <= .5) {
                 move(1)
             } else {
                 move(2)
             }
         }
+        // If we have gold, return home
+        if (hasGold && !turnComplete) {
+            while (pCol != 0 || pRow != 0) {
+                moveComplete = false
+                if (isValid(pRow - 1, pCol) && !moveComplete) {
+                    if (map[pRow - 1][pCol] == 'v') {
+                        while (pd != 3) {
+                            move(1)
+                        }
+                        gameScore--
+                        move(0)
+                        moveComplete = true
+                    } else if (!nearPit || !nearWumpus) {
+                        gameScore--
+                        move(0)
+                        moveComplete = true
+                    }
+                }
+                if (isValid(pRow, pCol - 1) && !moveComplete) {
+                    if (map[pRow][pCol - 1] == 'v') {
+                        while (pd != 2) {
+                            move(1)
+                        }
+                        gameScore--
+                        move(0)
+                        moveComplete = true
+                    }
+                } else if (!nearPit || !nearWumpus) {
+                    gameScore--
+                    move(0)
+                    moveComplete = true
+                }
+                if (isValid(pRow + 1, pCol) && !moveComplete) {
+                    if (map[pRow + 1][pCol] == 'v') {
+                        while (pd != 1) {
+                            move(1)
+                        }
+                        gameScore--
+                        move(0)
+                        moveComplete = true
+                    }
+                }
+                if (isValid(pRow, pCol + 1) && !moveComplete) {
+                    if (map[pRow][pCol + 1] == 'v') {
+                        while (pd != 0) {
+                            move(1)
+                        }
+                        gameScore--
+                        move(0)
+                        moveComplete = true
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 200));
+                gameLoop()
+            }
+            turnComplete = true
+        }
+        // If we are standing on gold, pick it up
+        if (nearGold() && !turnComplete) {
+            gameScore += 1000
+            move(3)
+            turnComplete = true
+        }
+        // If we are totally surrounded by visited tiles
+        if (surroundedByVisited() && !turnComplete) {
+            rand = Math.random()
+            if (rand <= .05) {
+                move(1)
+            } else if (rand <= .10) {
+                move(2)
+            } else {
+                gameScore--
+                move(0)
+            }
+            turnComplete = true
+        }
+        // If we have visited the tile we are facing, turn, unless we feel a breeze or smell the wumpus, then leave
+        if (isFacingVisitedSquare() && !turnComplete) {
+            if ((nearPit() || nearWumpus())) {
+                gameScore--
+                move(0)
+                turnComplete = true
+            } else {
+                move(1)
+                while (isFacingWall()) {
+                    move(1)
+                }
+            }
+        }
+        else if (!turnComplete) {
+            if (nearPit() || nearWumpus() && !turnComplete && tileKnowledge[pRow][pCol].timesVisited < 5) {
+                move(1)
+                while (isFacingWall()) {
+                    move(1)
+                }
+            } else {
+                gameScore--
+                move(0)
+                turnComplete = true
+            }
+        }
+        if (!turnComplete && tileKnowledge[pRow][pCol].timesVisited >= 5) {
+            gameScore--
+            move(0)
+        }
+        // Sleep for 200ms for rendering purposes
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    console.warn(gameScore)
+}
+
+
+
+// Starts the AI
+async function runSmartAI() {
+    console.log("starting AI!")
+    gameScore = 0
+    while (running) {
+        turnComplete = false;
+
+        // update this tile's percept 
+        tileKnowledge[pRow][pCol].nearWumpus = await nearWumpus()
+        tileKnowledge[pRow][pCol].nearPit = await nearPit()
+        tileKnowledge[pRow][pCol].visited = true
+
+        // Run a pass over the whole map's percepts to do some learning, return the edgePercepts
+        edgeNodes = await calculatePercepts()
+
+
 
         // If we have gold, return home
         if (hasGold && !turnComplete) {
-            await returnHome()
+            await navToCoords(0, 0)
             turnComplete = true
         }
 
         // If we are standing on gold, pick it up
         if (nearGold() && !turnComplete) {
+            gameScore += 1000
             move(3)
             turnComplete = true
         }
 
         if (!turnComplete) {
-            console.log("I'm doing the weird stuff! :D")
-            tileChoice = Array(4)
-
-            if (isValid(pRow, pCol + 1)) {
-                tileChoice[0] = await guessTile(pRow, pCol + 1)
-            }
-            if (isValid(pRow + 1, pCol)) {
-                tileChoice[1] = await guessTile(pRow + 1, pCol)
-            }
-            if (isValid(pRow, pCol - 1)) {
-                tileChoice[2] = await guessTile(pRow, pCol - 1)
-            }
-            if (isValid(pRow - 1, pCol)) {
-                tileChoice[3] = await guessTile(pRow - 1, pCol)
-            }
-
-            visitedTile = -1
-            bestDirection = -1
-            lowestDangerScore = 9999
-            for (i = 0; i < 4; i++) {
-                if (tileChoice[i] == null) {
-                    console.info("Tile in pos " + i + "Will not be considered")
-                    continue
-                }
-
-                dangerScore = (tileChoice[i][0] + tileChoice[i][1])
-
-                // Visited Tile, only use if we have to
-                if (dangerScore < 0) {
-                    visitedTile = i
-                    continue
-                }
-
-                console.log("For tile pos " + i + " " + tileChoice[i][0] + " " + tileChoice[i][1])
-                console.log("danger Score" + dangerScore)
-
-                if (dangerScore < lowestDangerScore) {
-                    lowestDangerScore = dangerScore
-                    bestDirection = i
-                } else if (dangerScore == lowestDangerScore) {
-                    rand = Math.random()
-                    if (rand <= 0.5 || lowestDangerScore == 9999) {
-                        lowestDangerScore = dangerScore
-                        bestDirection = i
-                    }
-                }
-
-            }
-
-            console.log("Turning to face %d", bestDirection)
-            while (pd != bestDirection && bestDirection != -1) {
-                move(1)
-            }
-            lastRow = pRow
-            lastCol = pCol
-            move(0)
-
+            safestEdgeNode = edgeNodes.shift()
+            console.log("navigating to C%dxR%d", safestEdgeNode.coord.col, safestEdgeNode.coord.row)
+            await navToCoords(safestEdgeNode.coord.row, safestEdgeNode.coord.col)
             turnComplete = true
         }
 
@@ -184,68 +254,34 @@ async function runAI() {
             console.error("Empty Turn! No move was made")
         }
         gameLoop()
-        console.log("~~~ END TICK ~~~\n\n\n")
 
-        // Sleep for 400ms for rendering purposes
-        await new Promise(resolve => setTimeout(resolve, 400));
+        // Sleep for tickLength for rendering purposes
+        await new Promise(resolve => setTimeout(resolve, tickLength));
 
     }
+    console.warn(gameScore)
 }
 
-async function returnHome() {
-    // Keep trying to get home as long as we aren't there
-    while (pCol != 0 || pRow != 0) {
-        moveComplete = false
 
-        if (isValid(pRow - 1, pCol) && !moveComplete) {
-            if (map[pRow - 1][pCol] == 'v') {
-                while (pd != 3) {
-                    move(1)
-                }
-                move(0)
+async function navToCoords(row, col) {
+    route = await bfs(row, col)
 
-                moveComplete = true
-            } else if (!nearPit || !nearWumpus) {
-                move(0)
-                moveComplete = true
-            }
+    for (k = 0; k < route.length; k++) {
+        nextCoords = route[k]
+
+        if (pCol == col && pRow == row || !running) {
+            break
         }
 
-        if (isValid(pRow, pCol - 1) && !moveComplete) {
-            if (map[pRow][pCol - 1] == 'v') {
-                while (pd != 2) {
-                    move(1)
-                }
-                move(0)
-                moveComplete = true
-            }
-        } else if (!nearPit || !nearWumpus) {
-            move(0)
-            moveComplete = true
-
+        while (!isFacingCoords(nextCoords.row, nextCoords.col) && running) {
+            await move(1)
         }
-
-        if (isValid(pRow + 1, pCol) && !moveComplete) {
-            if (map[pRow + 1][pCol] == 'v') {
-                while (pd != 1) {
-                    move(1)
-                }
-                move(0)
-                moveComplete = true
-            }
+        if (isFacingCoords(nextCoords.row, nextCoords.col) && running) {
+            gameScore--
+            await move(0)
         }
-
-        if (isValid(pRow, pCol + 1) && !moveComplete) {
-            if (map[pRow][pCol + 1] == 'v') {
-                while (pd != 0) {
-                    move(1)
-                }
-                move(0)
-                moveComplete = true
-            }
-        }
-        await new Promise(resolve => setTimeout(resolve, 400));
-        gameLoop()
+        await gameLoop()
+        await new Promise(resolve => setTimeout(resolve, tickLength));
     }
 }
 
@@ -262,6 +298,8 @@ function getRandomEmptyCoords() {
 
 
 function calculatePercepts() {
+    currentEdgeNodes = Array()
+
     for (i = 0; i < mapSize; i++) {
         for (j = 0; j < mapSize; j++) {
             curTile = tileKnowledge[i][j]
@@ -269,6 +307,7 @@ function calculatePercepts() {
             curTile.probabilityWumpus = 0
 
             if (map[i][j] == 'v') {
+                curTile.isEdgeNode = false
                 curTile.probabilityPit = -1
                 curTile.probabilityWumpus = -1
                 continue
@@ -280,6 +319,7 @@ function calculatePercepts() {
                     curTile.probabilityPit += .10
                     curTile.probabilityWumpus += .10
                 } else {
+                    curTile.isEdgeNode = true
                     if (downPercept.nearPit) {
                         curTile.probabilityPit += .50
                     }
@@ -298,6 +338,7 @@ function calculatePercepts() {
                     curTile.probabilityPit += .10
                     curTile.probabilityWumpus += .10
                 } else {
+                    curTile.isEdgeNode = true
                     if (upPercept.nearPit) {
                         curTile.probabilityPit += .50
                     }
@@ -316,6 +357,7 @@ function calculatePercepts() {
                     curTile.probabilityPit += .10
                     curTile.probabilityWumpus += .10
                 } else {
+                    curTile.isEdgeNode = true
                     if (rightPercept.nearPit) {
                         curTile.probabilityPit += .50
                     }
@@ -336,6 +378,8 @@ function calculatePercepts() {
                     curTile.probabilityPit += .10
                     curTile.probabilityWumpus += .10
                 } else {
+                    curTile.isEdgeNode = true
+
                     if (leftPercept.nearPit) {
                         curTile.probabilityPit += .50
                     }
@@ -347,99 +391,112 @@ function calculatePercepts() {
                 curTile.probabilityPit += .10
                 curTile.probabilityWumpus += .10
             }
-
-
-
+            tileKnowledge[i][j] = curTile
         }
+        currentEdgeNodes = currentEdgeNodes.concat(tileKnowledge[i].filter(tile => tile.isEdgeNode === true))
     }
+    currentEdgeNodes.sort(function (a, b) { return (a.probabilityPit + a.probabilityWumpus) - (b.probabilityPit + b.probabilityWumpus) })
+
+    return currentEdgeNodes
 }
 
 
-
+//  Breadth first search, to find a route to coords. Based off of example algorithm from BFS Wikipedia page
 function bfs(rowToFind, colToFind) {
 
     open_set = Array()
 
-    // # an empty set to maintain visited nodes
+    // an empty set to maintain visited nodes
     closed_set = Array()
 
-    // # a dictionary to maintain meta information(used for path formation)
-    // # key -> (parent state, action to reach child)
+    // a dictionary to maintain meta information(used for path formation)
+    // key -> (parent state, action to reach child)
     meta = {}
 
-    // # initialize
+    // initialize
     root = new PCoord(pRow, pCol)
     meta[root] = new SpecItem(null, null)
     open_set.push(root)
 
-    // # For each node on the current level expand and process, if no children
-    // # (leaf) then unwind
+    // For each node on the current level expand and process, if no children
+    // (leaf) then unwind
     while (open_set.length > 0) {
-        // console.log(open_set)
-        console.log(meta)
-
         subtree_root = open_set.shift()
 
-        // # We found the node we wanted so stop and emit a path.
+        // We found the node we wanted so stop and emit a path.
         if (subtree_root.row == rowToFind && subtree_root.col == colToFind) {
-            console.log("Searching is cool!")
-            meta[subtree_root] = new SpecItem(subtree_root, "0") //create metadata for these nodes
+            // meta[subtree_root] = new SpecItem(subtree_root, "0") //create metadata for these nodes
             return construct_path(subtree_root, meta)
         }
 
-        neighbors = getNeighborCoords(subtree_root)
-        // # For each child of the current tree process
+        neighbors = getNeighborCoords(subtree_root, (rowToFind == 0 && colToFind == 0))
+        // For each child of the current tree process
         for (i = 0; i < neighbors.length; i++) {
 
-            // # The node has already been processed, so skip over it
+            // The node has already been processed, so skip over it
             if (closed_set.filter(node => node.row == neighbors[i].row && node.col == neighbors[i].col).length > 0) {
-                console.log("Processed")
                 continue
             }
 
-            // # The neighbors[i] is not enqueued to be processed, so enqueue this level of
-            // # neighbors[i]ren to be expanded
+            // The neighbors[i] is not enqueued to be processed, so enqueue this level of
+            // neighbors[i]ren to be expanded
             if (open_set.filter(node => node.row == neighbors[i].row && node.col == neighbors[i].col).length == 0) {
-                console.log("Processing " + neighbors[i])
-                meta[neighbors[i]] = new SpecItem(subtree_root, "0") //create metadata for these nodes
+                meta[neighbors[i]] = new SpecItem(subtree_root, neighbors[i]) //create metadata for these nodes
                 open_set.push(neighbors[i]) // enqueue these nodes
             }
         }
     }
-    // # We finished processing the root of this subtree, so add it to the closed
-    // # set
+    // We finished processing the root of this subtree, so add it to the closed
+    // set
     closed_set.push(subtree_root)
 }
 
-// # Produce a backtrace of the actions taken to find the goal node, using the
-// # recorded meta dictionary
+// Produce a backtrace of the actions taken to find the goal node, using the
+// recorded meta dictionary
 function construct_path(state, meta) {
-    console.log(JSON.stringify(state) + " \n\n\n" + JSON.stringify(meta))
     action_list = Array()
-    // # Continue until you reach root meta data(i.e. (None, None))
+    // Continue until you reach root meta data(i.e. (None, None))
     while (meta[state] != null) {
         action = meta[state].action
         action_list.push(action)
-        state = meta[state].state
+        state = meta[state].parent_state
     }
     action_list.reverse()
+
+    action_list.shift()
     return action_list
 }
 
 
-function getNeighborCoords(pcCenter) {
+function getNeighborCoords(pcCenter, onlyVisited) {
     neighbors = []
     if (isValid(pcCenter.row, pcCenter.col + 1)) {
-        neighbors.push(new PCoord(pcCenter.row, pcCenter.col + 1))
+        if (map[pcCenter.row][pcCenter.col + 1] == 'v') {
+            neighbors.push(new PCoord(pcCenter.row, pcCenter.col + 1))
+        } else if (!onlyVisited) {
+            neighbors.push(new PCoord(pcCenter.row, pcCenter.col + 1))
+        }
     }
     if (isValid(pcCenter.row, pcCenter.col - 1)) {
-        neighbors.push(new PCoord(pcCenter.row, pcCenter.col - 1))
+        if (map[pcCenter.row][pcCenter.col - 1] == 'v') {
+            neighbors.push(new PCoord(pcCenter.row, pcCenter.col - 1))
+        } else if (!onlyVisited) {
+            neighbors.push(new PCoord(pcCenter.row, pcCenter.col - 1))
+        }
     }
     if (isValid(pcCenter.row + 1, pcCenter.col)) {
-        neighbors.push(new PCoord(pcCenter.row + 1, pcCenter.col))
+        if (map[pcCenter.row + 1][pcCenter.col] == 'v') {
+            neighbors.push(new PCoord(pcCenter.row + 1, pcCenter.col))
+        } else if (!onlyVisited) {
+            neighbors.push(new PCoord(pcCenter.row + 1, pcCenter.col))
+        }
     }
     if (isValid(pcCenter.row - 1, pcCenter.col)) {
-        neighbors.push(new PCoord(pcCenter.row - 1, pcCenter.col))
+        if (map[pcCenter.row - 1][pcCenter.col] == 'v') {
+            neighbors.push(new PCoord(pcCenter.row - 1, pcCenter.col))
+        } else if (!onlyVisited) {
+            neighbors.push(new PCoord(pcCenter.row - 1, pcCenter.col))
+        }
     }
     return neighbors
 }
@@ -465,6 +522,8 @@ function handleKey(e) {
     else if (e.keyCode == '16') {
         move(4);
     }
+    gameLoop()
+    calculatePercepts()
 }
 
 
@@ -619,29 +678,6 @@ function checkLocation() {
     // set current tile to visited
     if (map[pRow][pCol] == " " || map[pRow][pCol] == "h") {
         map[pRow][pCol] = "v";
-    }
-
-
-    // Update horizon squares
-    if (isValid(pRow + 1, pCol)) {
-        if (map[pRow + 1][pCol] == " ") {
-            map[pRow + 1][pCol] = 'h'
-        }
-    }
-    if (isValid(pRow - 1, pCol)) {
-        if (map[pRow - 1][pCol] == " ") {
-            map[pRow - 1][pCol] = 'h'
-        }
-    }
-    if (isValid(pRow, pCol + 1)) {
-        if (map[pRow][pCol + 1] == " ") {
-            map[pRow][pCol + 1] = 'h'
-        }
-    }
-    if (isValid(pRow, pCol - 1)) {
-        if (map[pRow][pCol - 1] == " ") {
-            map[pRow][pCol - 1] = 'h'
-        }
     }
 
     // the player wins if they have gold and
@@ -822,16 +858,11 @@ function draw() {
         for (row = 0; row < mapSize; row++) {
             for (col = 0; col < mapSize; col++) {
                 char = map[row][col];
-                // if the game is running only draw
-                // whether a square is or isn't visited
-                // don't draw pits, wumpus, or gold
-                if (char == " " || char == "v" || char == "h" || !running) {
+
+                if (char == " " || char == "v") {
                     // draw visited squares
-                    if (char == "v" && running) {
+                    if (char == "v") {
                         ctx.fillStyle = "#ADD8E6";
-                    }
-                    else if (char == "h" && running) {
-                        ctx.fillStyle = "pink"
                     }
                     //draw unvisited squares
                     else {
@@ -860,23 +891,12 @@ function draw() {
                 // Draw Percept overlay
                 percept = tileKnowledge[row][col]
 
-                ctx.font = tileSize / 4 + "px Arial";
-                // if (percept.nearWumpus) {
+                ctx.font = tileSize / 3.5 + "px Arial";
+
                 ctx.fillStyle = 'orange';
-                ctx.fillText(percept.probabilityWumpus, col * tileSize, row * tileSize + tileSize - (tileSize / 4.5));
-                // }
-                // if (percept.nearPit) {
-                ctx.fillStyle = 'black';
-                ctx.fillText(percept.probabilityPit, col * tileSize, row * tileSize + tileSize);
-
-                // }
-                if (percept.knownPit) {
-                    ctx.font = tileSize / 3 + "px Arial";
-                    ctx.fillStyle = 'white';
-                    ctx.fillText("PIT?", col * tileSize, row * tileSize + tileSize - (tileSize / 2));
-                }
-
-
+                ctx.fillText(percept.probabilityWumpus.toPrecision(3), col * tileSize, row * tileSize + tileSize - (tileSize / 4.5));
+                ctx.fillStyle = 'lightGreen';
+                ctx.fillText(percept.probabilityPit.toPrecision(3), col * tileSize, row * tileSize + tileSize);
             }
         }
         // draw player image with correct rotation
@@ -917,21 +937,26 @@ class PCoord {
     constructor(row, col) {
         this.row = row;
         this.col = col;
+        // Keeps the use of this in dictionaries unique
+        this.keyVal = Math.random() + Math.random() + row + col
     }
 }
 
 PCoord.prototype.toString = function () {
-    return "PCoord instance #" + this.row * this.col;
+    return "" + this.keyVal + "";
 };
 
 
 class PerceptNode {
-    constructor() {
+    constructor(coord) {
+        this.coord = coord
+        this.timesVisited = 0
         this.probabilityPit = 0
         this.probabilityWumpus = 0
         this.nearPit = false
         this.nearWumpus = false
         this.visited = false
+        this.isEdgeNode = false
     }
 
 }
