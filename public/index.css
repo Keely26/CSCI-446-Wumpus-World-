@@ -71,11 +71,6 @@ button {
     border-color: black;
 }
 
-#runAIButton {
-    width: 150px;
-    background-color: blue;
-}
-
 #createButton {
     width: 150px;
     background-color: green;
